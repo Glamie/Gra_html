@@ -1,0 +1,83 @@
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+}
+
+canvas {
+    border: 2px solid black;
+}
+
+#menu, #pauseScreen, #levelComplete, #gameOver {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    display: none;
+}
+
+#pauseScreen, #levelComplete, #gameOver {
+    display: none;
+}
+
+button {
+    padding: 10px 20px;
+    margin: 5px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+#score {
+    font-size: 24px;
+    margin: 10px;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: xx-large;
+}
+
+#levelInfo {
+    font-size: 24px;
+    margin: 10px;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: xx-large;
+}
+
+#info {
+    position: absolute;
+    bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    font-size: x-large;
+}
+
+#indicators {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    font-size: xx-large;
+}
+
+#startScreen {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    display: none;
+    top: 15%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+#startScreen h1 {
+    font-size: 48px;
+    margin-bottom: 20px;
+}
