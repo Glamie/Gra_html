@@ -48,12 +48,21 @@ button {
     font-size: xx-large;
 }
 
-#info {
+#klawisze {
     position: absolute;
     bottom: 10px;
     display: flex;
     flex-direction: column;
     font-size: x-large;
+}
+
+#info {
+    position: absolute;
+    right: 2%;
+    bottom: 2px;
+    display: flex;
+    flex-direction: column;
+    font-size: medium;
 }
 
 #indicators {
@@ -65,7 +74,7 @@ button {
     font-size: xx-large;
 }
 
-#startScreen {
+#startScreen, #menu, #pauseScreen, #levelComplete, #gameOver, #timedModeEnd {
     position: absolute;
     background: rgba(255, 255, 255, 0.8);
     padding: 20px;
@@ -76,8 +85,18 @@ button {
     left: 50%;
     transform: translate(-50%, -50%);
 }
-
-#startScreen h1 {
+#startScreen h1, #menu h2, #pauseScreen h2, #levelComplete h2, #gameOver h2, #timedModeEnd h2 {
     font-size: 48px;
     margin-bottom: 20px;
+}
+#timer {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 24px;
+    color: white;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 5px 10px;
+    border-radius: 5px;
 }

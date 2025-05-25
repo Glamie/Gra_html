@@ -9,24 +9,37 @@
 <body>
     <div id="score">Punkty: <span id="scoreValue">0</span></div>
     <div id="levelInfo">Poziom: <span id="levelValue">1</span></div>
-    <canvas id="plansza" width="1500" height="700"></canvas>
+    <div id="timer" style="display: none;">Czas: <span id="timeLeft">30</span>s</div>
+    <canvas id="plansza" width="1400" height="700"></canvas>
     <div id="indicators">
         <div id="ducksIndicator">Kaczki: <span id="ducksLeft"></span></div>
         <div id="bulletsIndicator">Naboje: <span id="bulletsLeft"></span></div>
     </div>
-    <div id="info">
+    <div id="klawisze">
+        <h3>Klawiszologia</h3>
         <p>P - pauza</p>
         <p>M - powrót do menu</p>
-        <p>Trafienie: +10 punktów</p>
+    </div>
+    <div id="info">
+        <h3>Trafienie:</h3>
+        <p>- Dużej kaczki: +10 punktów</p>
+        <p>- Małej kaczki: +20 punktów</p>
+        <p>- Paczki amunicji: +3 naboje</p>
+        <p>- Gwiazdki: +50 punktów</p>
     </div>
     <div id="startScreen">
         <h1>Duck Hunt</h1>
         <button id="startGame">Start</button>
     </div>
     <div id="menu">
-        <h2>Wybierz planszę</h2>
-        <button id="forestBoard">Las</button>
-        <button id="lakeBoard">Jezioro</button>
+        <h2>Wybierz tryb i planszę</h2>
+        <button id="normalMode">Tryb Normalny</button>
+        <button id="timedMode">Tryb Czasowy (30s)</button>
+        <div id="boardSelection" style="display: none;">
+            <h3>Wybierz planszę</h3>
+            <button id="forestBoard">Las</button>
+            <button id="lakeBoard">Jezioro</button>
+        </div>
     </div>
     <div id="pauseScreen">
         <h2>Pauza</h2>
@@ -43,6 +56,11 @@
         <p>Zdobyte punkty: <span id="finalScore"></span></p>
         <button id="backToMenuEnd">Powrót do menu</button>
     </div>
+    <div id="timedModeEnd" style="display: none;">
+        <h2>Koniec trybu czasowego!</h2>
+        <p>Zdobyte punkty: <span id="timedModeScore"></span></p>
+        <button id="backToMenuTimed">Powrót do menu</button>
+    </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
@@ -52,10 +70,15 @@
         let isPaused = false;
         let gameStarted = false;
         let ducks = [];
+        let powerUps = [];
+        let explosions = [];
         let currentBackground = null;
         let currentLevel = 1;
+        let gameMode = 'normal';
+        let timeLeft = 30;
+        let timerInterval = null;
         const levels = [
-            { ducksToSpawn: 2, bullets: 3 },
+            { ducksToSpawn: 3, bullets: 4 },
             { ducksToSpawn: 5, bullets: 7 },
             { ducksToSpawn: 7, bullets: 9 },
             { ducksToSpawn: 10, bullets: 13 },
@@ -72,6 +95,7 @@
         const failureSound = new Audio('dzwieki/game_over.mp3');
         const levelCompleteSound = new Audio('dzwieki/win.mp3');
         const menuMusic = new Audio('dzwieki/intro.mp3');
+        const powerUpSound = new Audio('dzwieki/power_up.mp3');
         menuMusic.loop = true;
 
         // Tła plansz
@@ -82,48 +106,121 @@
         const lakeBackground = new Image();
         lakeBackground.src = 'obrazy/jezioro.png';
 
-        // Obraz kaczki
+        // Obrazy kaczek
         const duckImage = new Image();
         duckImage.src = 'obrazy/kaczka.png';
+        const fastDuckImage = new Image();
+        fastDuckImage.src = 'obrazy/fast_duck.png';
 
-        // Oczekiwanie na załadowanie obrazów
+        // Obrazy power-upów
+        const bulletPowerUpImage = new Image();
+        bulletPowerUpImage.src = 'obrazy/ammo.png';
+        const pointsPowerUpImage = new Image();
+        pointsPowerUpImage.src = 'obrazy/points.png';
+
+        // Oczekiwanie na załadowanie obrazów 
         let imagesLoaded = 0;
-        const totalImages = 4; 
+        const totalImages = 7; 
         function checkImagesLoaded() {
             imagesLoaded++;
             if (imagesLoaded === totalImages) {
                 $('#startScreen').show();
-                drawMenuBackground(); 
+                drawMenuBackground();
             }
         }
         tlo.onload = checkImagesLoaded;
         forestBackground.onload = checkImagesLoaded;
         lakeBackground.onload = checkImagesLoaded;
         duckImage.onload = checkImagesLoaded;
+        fastDuckImage.onload = checkImagesLoaded;
+        bulletPowerUpImage.onload = checkImagesLoaded;
+        pointsPowerUpImage.onload = checkImagesLoaded;
         tlo.onerror = () => console.error('Błąd ładowania tlo.png');
         forestBackground.onerror = () => console.error('Błąd ładowania las.jpg');
         lakeBackground.onerror = () => console.error('Błąd ładowania jezioro.png');
         duckImage.onerror = () => console.error('Błąd ładowania kaczka.jpg');
+        fastDuckImage.onerror = () => console.error('Błąd ładowania fast_duck.png');
+        bulletPowerUpImage.onerror = () => console.error('Błąd ładowania bullet_powerup.png');
+        pointsPowerUpImage.onerror = () => console.error('Błąd ładowania points_powerup.png');
 
-        
         function drawMenuBackground() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (tlo.complete && tlo.naturalWidth !== 0) {
                 ctx.drawImage(tlo, 0, 0, canvas.width, canvas.height);
             } else {
-                ctx.fillStyle = 'gray'; 
+                ctx.fillStyle = 'gray';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
         }
 
+        class Explosion {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 5;
+                this.maxRadius = 30;
+                this.life = 0;
+                this.maxLife = 30;
+            }
+
+            update() {
+                this.life++;
+                this.radius = (this.life / this.maxLife) * this.maxRadius;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = 'yellow';
+                ctx.globalAlpha = 1 - (this.life / this.maxLife);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+
+            isDone() {
+                return this.life >= this.maxLife;
+            }
+        }
+
+        class PowerUp {
+            constructor(type) {
+                this.x = Math.random() * (canvas.width - 30);
+                this.y = Math.random() * (canvas.height - 30);
+                this.width = 60;
+                this.height = 60;
+                this.type = type;
+                this.life = 0;
+                this.maxLife = 300;
+            }
+
+            update() {
+                this.life++;
+            }
+
+            draw() {
+                const image = this.type === 'bullets' ? bulletPowerUpImage : pointsPowerUpImage;
+                if (image.complete && image.naturalWidth !== 0) {
+                    ctx.drawImage(image, this.x, this.y, this.width, this.height);
+                } else {
+                    ctx.fillStyle = this.type === 'bullets' ? 'orange' : 'gold';
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                }
+            }
+
+            isDone() {
+                return this.life >= this.maxLife;
+            }
+        }
+
         class Duck {
-            constructor() {
+            constructor(isFast = false) {
                 this.x = canvas.width / 2 - 25;
-                this.y = canvas.height / 2; 
-                this.speedX = (Math.random() - 0.5) * 3; // Prędkość pozioma
-                this.speedY = Math.random() * 4 - 2; // Prędkość pionowa 
-                this.width = 150;
-                this.height = 150;
+                this.y = canvas.height / 2;
+                this.isFast = isFast;
+                this.width = isFast ? 80 : 200;
+                this.height = isFast ? 80 : 200;
+                this.speedX = (Math.random() - 0.5) * (isFast ? 5 : 3);
+                this.speedY = (Math.random() * 4 - 2) * (isFast ? 1.5 : 1);
                 this.isHit = false;
                 this.fallSpeed = 0;
                 this.timeSinceLastChange = 0;
@@ -131,7 +228,7 @@
 
             update() {
                 if (this.isHit) {
-                    this.fallSpeed += 0.5; // Przyspieszenie spadania
+                    this.fallSpeed += 0.5;
                     this.y += this.fallSpeed;
                     if (this.y > canvas.height) {
                         const index = ducks.indexOf(this);
@@ -146,27 +243,25 @@
                     if (this.x <= 0 || this.x + this.width >= canvas.width) {
                         this.speedX = -this.speedX;
                     }
-                    if (this.y <= 0) {
-                        this.speedY = -this.speedY;
-                    }
-                    if (this.y + this.height >= canvas.height) { 
+                    if (this.y <= 0 || this.y + this.height >= canvas.height) {
                         this.speedY = -this.speedY;
                     }
 
-                    this.timeSinceLastChange += 1 / 60; //60 FPS
+                    this.timeSinceLastChange += 1 / 60;
                     if (this.timeSinceLastChange > 2 + Math.random()) {
-                        this.speedX = (Math.random() - 0.5) * 3; 
-                        this.speedY = Math.random() * 4 - 2;
+                        this.speedX = (Math.random() - 0.5) * (this.isFast ? 5 : 3);
+                        this.speedY = (Math.random() * 4 - 2) * (this.isFast ? 1.5 : 1);
                         this.timeSinceLastChange = 0;
                     }
                 }
             }
 
             draw() {
-                if (duckImage.complete && duckImage.naturalWidth !== 0) {
-                    ctx.drawImage(duckImage, this.x, this.y, this.width, this.height);
+                const image = this.isFast ? fastDuckImage : duckImage;
+                if (image.complete && image.naturalWidth !== 0) {
+                    ctx.drawImage(image, this.x, this.y, this.width, this.height);
                 } else {
-                    ctx.fillStyle = this.isHit ? 'red' : 'brown';
+                    ctx.fillStyle = this.isHit ? 'red' : (this.isFast ? 'purple' : 'brown');
                     ctx.fillRect(this.x, this.y, this.width, this.height);
                 }
             }
@@ -175,24 +270,54 @@
                 this.isHit = true;
                 this.speedX = 0;
                 this.speedY = 0;
+                explosions.push(new Explosion(this.x + this.width / 2, this.y + this.height / 2));
                 hitSound.play().catch(e => console.error('Błąd odtwarzania duck_hit.mp3:', e));
             }
         }
 
-        function startGame(background) {
-            menuMusic.pause(); 
+        function startGame(background, mode) {
+            menuMusic.pause();
             currentBackground = background === 'forest' ? forestBackground : lakeBackground;
+            gameMode = mode;
             gameStarted = true;
             isPaused = false;
             score = 0;
             currentLevel = 1;
             ducks = [];
+            powerUps = [];
+            explosions = [];
             levelCompleted = false;
             $('#menu').hide();
+            $('#boardSelection').hide();
             $('#pauseScreen').hide();
             $('#levelComplete').hide();
             $('#gameOver').hide();
-            startLevel();
+            $('#timedModeEnd').hide();
+
+            if (gameMode === 'timed') {
+                $('#timer').show();
+                timeLeft = 30;
+                $('#timeLeft').text(timeLeft);
+                bulletsLeft = Infinity;
+                timerInterval = setInterval(() => {
+                    if (!isPaused) {
+                        timeLeft--;
+                        $('#timeLeft').text(timeLeft);
+                        if (timeLeft <= 0) {
+                            clearInterval(timerInterval);
+                            isPaused = true;
+                            $('#timedModeScore').text(score);
+                            $('#timedModeEnd').show();
+                        }
+                    }
+                }, 1000);
+                spawnDucks();
+                spawnPowerUps();
+                gameLoop();
+            } else {
+                $('#timer').hide();
+                startLevel();
+            }
         }
 
         function startLevel() {
@@ -201,31 +326,48 @@
             bulletsLeft = levelData.bullets;
             ducksKilled = 0;
             ducks = [];
+            powerUps = [];
+            explosions = [];
             levelCompleted = false;
             updateIndicators();
             spawnDucks();
+            spawnPowerUps();
             gameLoop();
         }
 
         function spawnDucks() {
-            if (!isPaused && gameStarted && ducks.length < 5 && ducks.length < ducksToKill - ducksKilled) {
-                ducks.push(new Duck());
-                setTimeout(spawnDucks, 1000); 
+            if (!isPaused && gameStarted && (gameMode === 'timed' || (ducks.length < 5 && ducks.length < ducksToKill - ducksKilled))) {
+                const isFast = Math.random() < 0.3;
+                ducks.push(new Duck(isFast));
+                setTimeout(spawnDucks, 1000);
+            }
+        }
+
+        function spawnPowerUps() {
+            if (!isPaused && gameStarted) {
+                const type = Math.random() < 0.5 ? 'bullets' : 'points';
+                powerUps.push(new PowerUp(type));
+                setTimeout(spawnPowerUps, 10000);
             }
         }
 
         function updateIndicators() {
-            let ducksLeftText = '';
-            for (let i = 0; i < ducksToKill; i++) {
-                ducksLeftText += i < ducksToKill - ducksKilled ? '🦆' : '☑';
-            }
-            $('#ducksLeft').text(ducksLeftText);
+            if (gameMode === 'normal') {
+                let ducksLeftText = '';
+                for (let i = 0; i < ducksToKill; i++) {
+                    ducksLeftText += i < ducksToKill - ducksKilled ? '🦆' : '☑';
+                }
+                $('#ducksLeft').text(ducksLeftText);
 
-            let bulletsLeftText = '';
-            for (let i = 0; i < levels[currentLevel - 1].bullets; i++) {
-                bulletsLeftText += i < bulletsLeft ? '🔫' : '⬜';
+                let bulletsLeftText = '';
+                for (let i = 0; i < levels[currentLevel - 1].bullets; i++) {
+                    bulletsLeftText += i < bulletsLeft ? '🔫' : '⬜';
+                }
+                $('#bulletsLeft').text(bulletsLeftText);
+            } else {
+                $('#ducksLeft').text('∞');
+                $('#bulletsLeft').text('∞');
             }
-            $('#bulletsLeft').text(bulletsLeftText);
 
             $('#levelValue').text(currentLevel);
             $('#scoreValue').text(score);
@@ -247,7 +389,19 @@
                     duck.draw();
                 });
 
-                if (ducksKilled >= ducksToKill && ducks.length === 0 && !levelCompleted) {
+                powerUps.forEach(powerUp => {
+                    powerUp.update();
+                    powerUp.draw();
+                });
+                powerUps = powerUps.filter(powerUp => !powerUp.isDone());
+
+                explosions.forEach(explosion => {
+                    explosion.update();
+                    explosion.draw();
+                });
+                explosions = explosions.filter(explosion => !explosion.isDone());
+
+                if (gameMode === 'normal' && ducksKilled >= ducksToKill && ducks.length === 0 && !levelCompleted) {
                     isPaused = true;
                     levelCompleted = true;
                     levelCompleteSound.play().catch(e => console.error('Błąd odtwarzania win.mp3:', e));
@@ -265,28 +419,43 @@
         }
 
         $(canvas).on('click', function(e) {
-            if (!isPaused && gameStarted && bulletsLeft > 0) {
-                bulletsLeft--;
+            if (!isPaused && gameStarted && (gameMode === 'timed' || bulletsLeft > 0)) {
+                if (gameMode === 'normal') bulletsLeft--;
                 shotSound.play().catch(e => console.error('Błąd odtwarzania shot.mp3:', e));
 
                 const rect = canvas.getBoundingClientRect();
                 const clickX = e.clientX - rect.left;
                 const clickY = e.clientY - rect.top;
 
+                for (let i = powerUps.length - 1; i >= 0; i--) {
+                    const powerUp = powerUps[i];
+                    if (clickX >= powerUp.x && clickX <= powerUp.x + powerUp.width &&
+                        clickY >= powerUp.y && clickY <= powerUp.y + powerUp.height) {
+                        if (powerUp.type === 'bullets') {
+                            bulletsLeft += 3;
+                        } else {
+                            score += 50;
+                        }
+                        powerUps.splice(i, 1);
+                        powerUpSound.play().catch(e => console.error('Błąd odtwarzania power-up sound:', e));
+                        break;
+                    }
+                }
+
                 for (let i = ducks.length - 1; i >= 0; i--) {
                     const duck = ducks[i];
                     if (!duck.isHit && clickX >= duck.x && clickX <= duck.x + duck.width &&
                         clickY >= duck.y && clickY <= duck.y + duck.height) {
                         duck.hit();
+                        score += duck.isFast ? 20 : 10;
                         ducksKilled++;
-                        score += 10;
                         break;
                     }
                 }
 
                 updateIndicators();
 
-                if (bulletsLeft === 0 && ducksKilled < ducksToKill) {
+                if (gameMode === 'normal' && bulletsLeft === 0 && ducksKilled < ducksToKill) {
                     isPaused = true;
                     failureSound.play().catch(e => console.error('Błąd odtwarzania game_over.mp3:', e));
                     $('#gameOver').show();
@@ -302,7 +471,20 @@
             menuMusic.play().catch(e => console.error('Błąd odtwarzania intro.mp3:', e));
         });
 
-        // Obsługa pauzy i powrotu do menu
+        $('#normalMode').on('click', function() {
+            gameMode = 'normal';
+            $('#normalMode').hide();
+            $('#timedMode').hide();
+            $('#boardSelection').show();
+        });
+
+        $('#timedMode').on('click', function() {
+            gameMode = 'timed';
+            $('#normalMode').hide();
+            $('#timedMode').hide();
+            $('#boardSelection').show();
+        });
+
         $(document).on('keydown', function(e) {
             const key = e.key.toLowerCase();
             if (key === 'p' && gameStarted) {
@@ -311,27 +493,33 @@
                 if (!isPaused) {
                     gameLoop();
                     spawnDucks();
+                    if (gameMode === 'normal') spawnPowerUps();
                 }
             } else if (key === 'm' && gameStarted) {
                 gameStarted = false;
                 isPaused = false;
+                if (timerInterval) clearInterval(timerInterval);
                 $('#pauseScreen').hide();
                 $('#levelComplete').hide();
                 $('#gameOver').hide();
+                $('#timedModeEnd').hide();
                 $('#menu').show();
+                $('#normalMode').show();
+                $('#timedMode').show();
+                $('#boardSelection').hide();
+                $('#timer').hide();
                 ducks = [];
                 drawMenuBackground();
                 menuMusic.play().catch(e => console.error('Błąd odtwarzania intro.mp3:', e));
             }
         });
 
-        // Obsługa menu
         $('#forestBoard').on('click', function() {
-            startGame('forest');
+            startGame('forest', gameMode);
         });
 
         $('#lakeBoard').on('click', function() {
-            startGame('lake');
+            startGame('lake', gameMode);
         });
 
         $('#resumeGame').on('click', function() {
@@ -339,15 +527,22 @@
             $('#pauseScreen').hide();
             gameLoop();
             spawnDucks();
+            if (gameMode === 'normal') spawnPowerUps();
         });
 
         $('#backToMenu').on('click', function() {
             gameStarted = false;
             isPaused = false;
+            if (timerInterval) clearInterval(timerInterval);
             $('#pauseScreen').hide();
             $('#levelComplete').hide();
             $('#gameOver').hide();
+            $('#timedModeEnd').hide();
             $('#menu').show();
+            $('#normalMode').show();
+            $('#timedMode').show();
+            $('#boardSelection').hide();
+            $('#timer').hide();
             ducks = [];
             drawMenuBackground();
             menuMusic.play().catch(e => console.error('Błąd odtwarzania intro.mp3:', e));
@@ -363,9 +558,32 @@
         $(document).on('click', '#backToMenuEnd', function() {
             gameStarted = false;
             isPaused = false;
+            if (timerInterval) clearInterval(timerInterval);
             $('#gameOver').hide();
             $('#levelComplete').hide();
+            $('#timedModeEnd').hide();
             $('#menu').show();
+            $('#normalMode').show();
+            $('#timedMode').show();
+            $('#boardSelection').hide();
+            $('#timer').hide();
+            ducks = [];
+            drawMenuBackground();
+            menuMusic.play().catch(e => console.error('Błąd odtwarzania intro.mp3:', e));
+        });
+
+        $(document).on('click', '#backToMenuTimed', function() {
+            gameStarted = false;
+            isPaused = false;
+            if (timerInterval) clearInterval(timerInterval);
+            $('#gameOver').hide();
+            $('#levelComplete').hide();
+            $('#timedModeEnd').hide();
+            $('#menu').show();
+            $('#normalMode').show();
+            $('#timedMode').show();
+            $('#boardSelection').hide();
+            $('#timer').hide();
             ducks = [];
             drawMenuBackground();
             menuMusic.play().catch(e => console.error('Błąd odtwarzania intro.mp3:', e));
@@ -375,6 +593,7 @@
         $('#pauseScreen').hide();
         $('#levelComplete').hide();
         $('#gameOver').hide();
+        $('#timedModeEnd').hide();
         $('#startScreen').hide();
     </script>
 </body>
