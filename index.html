@@ -10,7 +10,7 @@
     <div id="score">Punkty: <span id="scoreValue">0</span></div>
     <div id="levelInfo">Poziom: <span id="levelValue">1</span></div>
     <div id="timer" style="display: none;">Czas: <span id="timeLeft">30</span>s</div>
-    <canvas id="plansza" width="1400" height="700"></canvas>
+    <canvas id="plansza" width="1200" height="600"></canvas>
     <div id="indicators">
         <div id="ducksIndicator">Kaczki: <span id="ducksLeft"></span></div>
         <div id="bulletsIndicator">Naboje: <span id="bulletsLeft"></span></div>
@@ -79,14 +79,16 @@
         let timerInterval = null;
         const levels = [
             { ducksToSpawn: 3, bullets: 4 },
-            { ducksToSpawn: 5, bullets: 7 },
+            { ducksToSpawn: 5, bullets: 6 },
             { ducksToSpawn: 7, bullets: 9 },
-            { ducksToSpawn: 10, bullets: 13 },
-            { ducksToSpawn: 15, bullets: 18 }
+            { ducksToSpawn: 10, bullets: 12 },
+            { ducksToSpawn: 15, bullets: 17 }
         ];
         let ducksToKill = 0;
         let bulletsLeft = 0;
         let ducksKilled = 0;
+        let ducksSpawned = 0; 
+        let reload = true;
         let levelCompleted = false;
 
         // Dźwięki
@@ -219,11 +221,12 @@
                 this.isFast = isFast;
                 this.width = isFast ? 80 : 200;
                 this.height = isFast ? 80 : 200;
-                this.speedX = (Math.random() - 0.5) * (isFast ? 5 : 3);
-                this.speedY = (Math.random() * 4 - 2) * (isFast ? 1.5 : 1);
+                this.speedX = (Math.random() - 0.7) * (isFast ? 5 : 3);  //predkosc po osi x
+                this.speedY = (Math.random() * 4 - 2.5) * (isFast ? 2 : 1); //predkosc po osi y
                 this.isHit = false;
                 this.fallSpeed = 0;
                 this.timeSinceLastChange = 0;
+                this.isOffScreen = false; 
             }
 
             update() {
@@ -231,10 +234,7 @@
                     this.fallSpeed += 0.5;
                     this.y += this.fallSpeed;
                     if (this.y > canvas.height) {
-                        const index = ducks.indexOf(this);
-                        if (index > -1) {
-                            ducks.splice(index, 1);
-                        }
+                        this.isOffScreen = true; 
                     }
                 } else {
                     this.x += this.speedX;
@@ -257,12 +257,14 @@
             }
 
             draw() {
-                const image = this.isFast ? fastDuckImage : duckImage;
-                if (image.complete && image.naturalWidth !== 0) {
-                    ctx.drawImage(image, this.x, this.y, this.width, this.height);
-                } else {
-                    ctx.fillStyle = this.isHit ? 'red' : (this.isFast ? 'purple' : 'brown');
-                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                if (!this.isOffScreen) { 
+                    const image = this.isFast ? fastDuckImage : duckImage;
+                    if (image.complete && image.naturalWidth !== 0) {
+                        ctx.drawImage(image, this.x, this.y, this.width, this.height);
+                    } else {
+                        ctx.fillStyle = this.isHit ? 'red' : (this.isFast ? 'purple' : 'brown');
+                        ctx.fillRect(this.x, this.y, this.width, this.height);
+                    }
                 }
             }
 
@@ -284,6 +286,7 @@
             score = 0;
             currentLevel = 1;
             ducks = [];
+            ducksSpawned = 0;
             powerUps = [];
             explosions = [];
             levelCompleted = false;
@@ -325,6 +328,7 @@
             ducksToKill = levelData.ducksToSpawn;
             bulletsLeft = levelData.bullets;
             ducksKilled = 0;
+            ducksSpawned = 0;
             ducks = [];
             powerUps = [];
             explosions = [];
@@ -336,10 +340,22 @@
         }
 
         function spawnDucks() {
-            if (!isPaused && gameStarted && (gameMode === 'timed' || (ducks.length < 5 && ducks.length < ducksToKill - ducksKilled))) {
+            if (!gameStarted || isPaused) return; 
+
+            if (gameMode === 'normal' && ducksSpawned >= ducksToKill) {
+                return;
+            }
+
+            if (gameMode === 'timed' || (ducks.length < 5 && ducksKilled < ducksToKill)) {
                 const isFast = Math.random() < 0.3;
                 ducks.push(new Duck(isFast));
-                setTimeout(spawnDucks, 1000);
+                if (gameMode === 'normal') {
+                    ducksSpawned++;
+                }
+            }
+
+            if (gameStarted && !isPaused) {
+                setTimeout(spawnDucks, 700);
             }
         }
 
@@ -389,6 +405,9 @@
                     duck.draw();
                 });
 
+                
+                ducks = ducks.filter(duck => !(duck.isHit && duck.isOffScreen));
+
                 powerUps.forEach(powerUp => {
                     powerUp.update();
                     powerUp.draw();
@@ -401,7 +420,7 @@
                 });
                 explosions = explosions.filter(explosion => !explosion.isDone());
 
-                if (gameMode === 'normal' && ducksKilled >= ducksToKill && ducks.length === 0 && !levelCompleted) {
+                if (gameMode === 'normal' && ducksKilled >= ducksToKill && ducksSpawned >= ducksToKill && !levelCompleted) {
                     isPaused = true;
                     levelCompleted = true;
                     levelCompleteSound.play().catch(e => console.error('Błąd odtwarzania win.mp3:', e));
@@ -419,7 +438,12 @@
         }
 
         $(canvas).on('click', function(e) {
-            if (!isPaused && gameStarted && (gameMode === 'timed' || bulletsLeft > 0)) {
+            if (!isPaused && gameStarted && reload && (gameMode === 'timed' || bulletsLeft > 0)) {
+                reload = false;
+                setTimeout(() => {
+                    reload = true;
+                }, 1200);
+
                 if (gameMode === 'normal') bulletsLeft--;
                 shotSound.play().catch(e => console.error('Błąd odtwarzania shot.mp3:', e));
 
@@ -509,6 +533,7 @@
                 $('#boardSelection').hide();
                 $('#timer').hide();
                 ducks = [];
+                ducksSpawned = 0;
                 drawMenuBackground();
                 menuMusic.play().catch(e => console.error('Błąd odtwarzania intro.mp3:', e));
             }
@@ -544,6 +569,7 @@
             $('#boardSelection').hide();
             $('#timer').hide();
             ducks = [];
+            ducksSpawned = 0;
             drawMenuBackground();
             menuMusic.play().catch(e => console.error('Błąd odtwarzania intro.mp3:', e));
         });
@@ -568,6 +594,7 @@
             $('#boardSelection').hide();
             $('#timer').hide();
             ducks = [];
+            ducksSpawned = 0;
             drawMenuBackground();
             menuMusic.play().catch(e => console.error('Błąd odtwarzania intro.mp3:', e));
         });
@@ -585,6 +612,7 @@
             $('#boardSelection').hide();
             $('#timer').hide();
             ducks = [];
+            ducksSpawned = 0;
             drawMenuBackground();
             menuMusic.play().catch(e => console.error('Błąd odtwarzania intro.mp3:', e));
         });
