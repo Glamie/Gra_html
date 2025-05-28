@@ -53,7 +53,7 @@ button {
     bottom: 10px;
     display: flex;
     flex-direction: column;
-    font-size: x-large;
+    font-size: medium;
 }
 
 #info {
